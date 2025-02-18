@@ -1,6 +1,8 @@
 # Borrzu WordPress Plugin
 
-![Borrzu Logo](assets/logo.svg)
+<div align="center">
+  <img src="assets/logo.svg" alt="Borrzu Logo" width="180px">
+</div>
 
 A powerful WordPress plugin for managing API keys and monitoring API requests for Borrzu.com integration.
 
