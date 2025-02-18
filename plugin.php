@@ -315,8 +315,16 @@ function uvp_api_logs_page() {
         <div class="borrzu-card">
             <?php if (empty($logs)) : ?>
                 <div class="borrzu-empty-state">
-                    <img src="<?php echo plugins_url('assets/empty-state.svg', __FILE__); ?>" alt="بدون گزارش">
-                    <p>هنوز هیچ درخواست API‌ای ثبت نشده است.</p>
+                    <div class="empty-state-icon">
+                        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M21 7V17C21 18.1046 20.1046 19 19 19H5C3.89543 19 3 18.1046 3 17V7C3 5.89543 3.89543 5 5 5H19C20.1046 5 21 5.89543 21 7Z" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 7L12 13L21 7" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="12" cy="12" r="8" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.5"/>
+                            <path d="M12 8V12M12 14V16" stroke="#9CA3AF" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3>بدون گزارش</h3>
+                    <p>هنوز هیچ درخواست API‌ای ثبت نشده است</p>
                 </div>
             <?php else : ?>
                 <div class="borrzu-logs-table">
@@ -397,11 +405,26 @@ function uvp_api_logs_page() {
         }
         .borrzu-empty-state {
             text-align: center;
-            padding: 40px 20px;
+            padding: 60px 20px;
+            background: #fff;
+            border-radius: 8px;
         }
-        .borrzu-empty-state img {
-            width: 150px;
+        .empty-state-icon {
             margin-bottom: 20px;
+        }
+        .empty-state-icon svg {
+            width: 120px;
+            height: 120px;
+        }
+        .borrzu-empty-state h3 {
+            color: #374151;
+            font-size: 1.5em;
+            margin: 0 0 10px 0;
+        }
+        .borrzu-empty-state p {
+            color: #6B7280;
+            font-size: 1.1em;
+            margin: 0;
         }
         .log-item {
             border: 1px solid #ddd;
