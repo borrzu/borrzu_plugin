@@ -16,15 +16,15 @@ A powerful WordPress plugin for managing API keys and monitoring API requests fo
 ## 📸 Screenshots
 
 ### API Logs Dashboard
-![API Logs Dashboard](assets/1.jpg)
+![API Logs Dashboard](assets/1.png)
 *Monitor and filter API requests with detailed information*
 
 ### Key Management
-![Key Management](assets/2.jpg)
+![Key Management](assets/2.png)
 *Securely manage API keys with regeneration capability*
 
 ### Detailed Request Logs
-![Request Details](assets/3.jpg)
+![Request Details](assets/3.png)
 *View detailed request and response information in a clean modal interface*
 
 ## 🔧 Installation
