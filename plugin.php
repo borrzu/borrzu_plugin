@@ -500,9 +500,6 @@ function uvp_admin_page() {
     $user_id = get_current_user_id();
     $secret_key = get_user_meta($user_id, 'uvp_secret_key', true);
     
-    // Get current tab
-    $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'manage-keys';
-
     // بررسی فرم‌های ارسالی
     if (isset($_POST['uvp_secret_key_action'])) {
         $action = sanitize_text_field($_POST['uvp_secret_key_action']);
@@ -530,144 +527,79 @@ function uvp_admin_page() {
         </h1>
 
         <div class="borrzu-tabs">
-            <a href="?page=borrzu-secret-key" class="tab-item">مدیریت کلید‌ها</a>
+            <a href="?page=borrzu-secret-key" class="tab-item active">مدیریت کلید‌ها</a>
             <a href="?page=borrzu-api-logs" class="tab-item">گزارش‌های API</a>
         </div>
 
         <div class="borrzu-card">
-            <div class="borrzu-inner-tabs">
-                <a href="?page=borrzu-secret-key&tab=manage-keys" 
-                   class="inner-tab-item <?php echo $current_tab === 'manage-keys' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-admin-network"></span>
-                    مدیریت کلید
-                </a>
-                <a href="?page=borrzu-secret-key&tab=documentation" 
-                   class="inner-tab-item <?php echo $current_tab === 'documentation' ? 'active' : ''; ?>">
-                    <span class="dashicons dashicons-book"></span>
-                    راهنمای استفاده
-                </a>
-            </div>
-
-            <?php if ($current_tab === 'manage-keys'): ?>
-                <div class="tab-content">
-                    <div class="key-status-section">
-                        <?php if (empty($secret_key)) : ?>
-                            <div class="no-key-state">
-                                <div class="key-icon">🔑</div>
-                                <h2>کلید مخفی ندارید</h2>
-                                <p>برای استفاده از API برزو، نیاز به یک کلید مخفی دارید.</p>
-                                <form method="post" action="">
+            <div class="key-status-section">
+                <?php if (empty($secret_key)) : ?>
+                    <div class="no-key-state">
+                        <div class="key-icon">🔑</div>
+                        <h2>کلید مخفی ندارید</h2>
+                        <p>برای استفاده از API برزو، نیاز به یک کلید مخفی دارید.</p>
+                        <form method="post" action="">
+                            <?php wp_nonce_field('uvp_secret_key_action', 'uvp_nonce'); ?>
+                            <input type="hidden" name="uvp_secret_key_action" value="regenerate">
+                            <button type="submit" class="button button-primary button-hero">
+                                <span class="dashicons dashicons-plus-alt"></span>
+                                ساخت کلید جدید
+                            </button>
+                        </form>
+                    </div>
+                <?php else : ?>
+                    <div class="has-key-state">
+                        <div class="key-header">
+                            <div class="key-status">
+                                <span class="status-badge">فعال</span>
+                                <h2>کلید مخفی شما</h2>
+                            </div>
+                            <div class="key-actions">
+                                <button type="button" onclick="copyToClipboard('uvp_secret_key')" class="button button-secondary">
+                                    <span class="dashicons dashicons-clipboard"></span>
+                                    کپی کلید
+                                </button>
+                                <form method="post" action="" style="display: inline-block;">
                                     <?php wp_nonce_field('uvp_secret_key_action', 'uvp_nonce'); ?>
                                     <input type="hidden" name="uvp_secret_key_action" value="regenerate">
-                                    <button type="submit" class="button button-primary button-hero">
-                                        <span class="dashicons dashicons-plus-alt"></span>
-                                        ساخت کلید جدید
+                                    <button type="submit" class="button button-secondary">
+                                        <span class="dashicons dashicons-update"></span>
+                                        بازسازی کلید
                                     </button>
                                 </form>
                             </div>
-                        <?php else : ?>
-                            <div class="has-key-state">
-                                <div class="key-header">
-                                    <div class="key-status">
-                                        <span class="status-badge">فعال</span>
-                                        <h2>کلید مخفی شما</h2>
-                                    </div>
-                                    <div class="key-actions">
-                                        <button type="button" onclick="copyToClipboard('uvp_secret_key')" class="button button-secondary">
-                                            <span class="dashicons dashicons-clipboard"></span>
-                                            کپی کلید
-                                        </button>
-                                        <form method="post" action="" style="display: inline-block;">
-                                            <?php wp_nonce_field('uvp_secret_key_action', 'uvp_nonce'); ?>
-                                            <input type="hidden" name="uvp_secret_key_action" value="regenerate">
-                                            <button type="submit" class="button button-secondary">
-                                                <span class="dashicons dashicons-update"></span>
-                                                بازسازی کلید
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                                
-                                <div class="key-display">
-                                    <input type="text" id="uvp_secret_key" value="<?php echo esc_attr($secret_key); ?>" class="regular-text" readonly>
-                                </div>
-                                
-                                <div class="key-info">
-                                    <div class="info-item">
-                                        <span class="dashicons dashicons-shield"></span>
-                                        <span>این کلید را در جای امنی نگهداری کنید</span>
-                                    </div>
-                                    <div class="info-item">
-                                        <span class="dashicons dashicons-warning"></span>
-                                        <span>در صورت بازسازی کلید، کلید قبلی غیرفعال خواهد شد</span>
-                                    </div>
-                                </div>
-
-                                <div class="danger-zone">
-                                    <h3>ناحیه خطر</h3>
-                                    <p>حذف کلید مخفی باعث قطع دسترسی به API خواهد شد.</p>
-                                    <form method="post" action="">
-                                        <?php wp_nonce_field('uvp_secret_key_action', 'uvp_nonce'); ?>
-                                        <input type="hidden" name="uvp_secret_key_action" value="delete">
-                                        <button type="submit" class="button button-danger" onclick="return confirm('آیا از حذف کلید مخفی خود اطمینان دارید؟')">
-                                            <span class="dashicons dashicons-trash"></span>
-                                            حذف کلید
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            <?php elseif ($current_tab === 'documentation'): ?>
-                <div class="tab-content">
-                    <div class="documentation-section">
-                        <h2>راهنمای استفاده از API برزو</h2>
+                        </div>
                         
-                        <div class="doc-section">
-                            <h3>نحوه استفاده از کلید مخفی</h3>
-                            <p>برای استفاده از API برزو، باید کلید مخفی خود را در هدر درخواست‌ها قرار دهید:</p>
-                            <pre><code>Authorization: Bearer YOUR_SECRET_KEY</code></pre>
+                        <div class="key-display">
+                            <input type="text" id="uvp_secret_key" value="<?php echo esc_attr($secret_key); ?>" class="regular-text" readonly>
                         </div>
-
-                        <div class="doc-section">
-                            <h3>نمونه کد</h3>
-                            <div class="code-example">
-                                <div class="code-tabs">
-                                    <button class="code-tab active" data-lang="curl">cURL</button>
-                                    <button class="code-tab" data-lang="php">PHP</button>
-                                    <button class="code-tab" data-lang="js">JavaScript</button>
-                                </div>
-                                <div class="code-content curl active">
-                                    <pre><code>curl -X POST "https://api.borrzu.com/v1/endpoint" \
--H "Authorization: Bearer YOUR_SECRET_KEY" \
--H "Content-Type: application/json" \
--d '{"key": "value"}'</code></pre>
-                                </div>
-                                <div class="code-content php">
-                                    <pre><code>$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, "https://api.borrzu.com/v1/endpoint");
-curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-    "Authorization: Bearer " . YOUR_SECRET_KEY,
-    "Content-Type: application/json"
-));
-$result = curl_exec($ch);</code></pre>
-                                </div>
-                                <div class="code-content js">
-                                    <pre><code>fetch('https://api.borrzu.com/v1/endpoint', {
-    method: 'POST',
-    headers: {
-        'Authorization': `Bearer ${YOUR_SECRET_KEY}`,
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ key: 'value' })
-});</code></pre>
-                                </div>
+                        
+                        <div class="key-info">
+                            <div class="info-item">
+                                <span class="dashicons dashicons-shield"></span>
+                                <span>این کلید را در جای امنی نگهداری کنید</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="dashicons dashicons-warning"></span>
+                                <span>در صورت بازسازی کلید، کلید قبلی غیرفعال خواهد شد</span>
                             </div>
                         </div>
+
+                        <div class="danger-zone">
+                            <h3>ناحیه خطر</h3>
+                            <p>حذف کلید مخفی باعث قطع دسترسی به API خواهد شد.</p>
+                            <form method="post" action="">
+                                <?php wp_nonce_field('uvp_secret_key_action', 'uvp_nonce'); ?>
+                                <input type="hidden" name="uvp_secret_key_action" value="delete">
+                                <button type="submit" class="button button-danger" onclick="return confirm('آیا از حذف کلید مخفی خود اطمینان دارید؟')">
+                                    <span class="dashicons dashicons-trash"></span>
+                                    حذف کلید
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -830,73 +762,28 @@ $result = curl_exec($ch);</code></pre>
         .dashicons {
             transform: scaleX(-1);
         }
-        
-        /* Documentation styles */
-        .documentation-section {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .doc-section {
-            margin-bottom: 30px;
-        }
-        .doc-section h3 {
-            color: #2271b1;
-            margin-bottom: 15px;
-        }
-        .code-example {
-            background: #f8f9fa;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .code-tabs {
-            background: #fff;
-            border-bottom: 1px solid #ddd;
-            padding: 10px;
-        }
-        .code-tab {
-            background: none;
-            border: none;
-            padding: 8px 16px;
-            cursor: pointer;
-            margin-left: 10px;
-            border-radius: 4px;
-        }
-        .code-tab.active {
-            background: #2271b1;
-            color: white;
-        }
-        .code-content {
-            display: none;
-            padding: 20px;
-        }
-        .code-content.active {
-            display: block;
-        }
-        pre {
-            margin: 0;
-            white-space: pre-wrap;
-            direction: ltr;
-            text-align: left;
-        }
-        code {
-            font-family: monospace;
-            font-size: 14px;
-        }
     </style>
 
     <script>
-    jQuery(document).ready(function($) {
-        // Existing scripts ...
-
-        // Code tabs functionality
-        $('.code-tab').click(function() {
-            const lang = $(this).data('lang');
-            $('.code-tab').removeClass('active');
-            $(this).addClass('active');
-            $('.code-content').removeClass('active');
-            $(`.code-content.${lang}`).addClass('active');
-        });
-    });
+    async function copyToClipboard(elementId) {
+        try {
+            const copyText = document.getElementById(elementId);
+            if (!copyText) return;
+            
+            await navigator.clipboard.writeText(copyText.value);
+            // Use WordPress admin notices style
+            const notice = document.createElement('div');
+            notice.className = 'notice notice-success is-dismissible';
+            notice.innerHTML = '<p>کلید مخفی با موفقیت کپی شد.</p>';
+            
+            const targetElement = document.querySelector('.borrzu-secret-key-section');
+            targetElement.insertBefore(notice, targetElement.firstChild);
+            
+            setTimeout(() => notice.remove(), 3000);
+        } catch (err) {
+            console.error('Copy failed:', err);
+        }
+    }
     </script>
     <?php
 }
