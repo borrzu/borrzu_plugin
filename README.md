@@ -1,13 +1,18 @@
 # Borrzu WordPress Plugin
 
 <div align="center">
-  <img src="assets/logo.svg" alt="Borrzu Logo" width="180px">
+  <img src="assets/logo.svg" alt="Borrzu Logo" width="120px">
 </div>
 
 A powerful WordPress plugin for managing API keys and monitoring API requests for Borrzu.com integration.
 
 [🇮🇷 مستندات فارسی](README-fa.md)
 
+## 📥 Download
+
+Download the latest version of the plugin:
+
+[Download Borrzu Plugin v0.0.1](https://github.com/borrzu/borrzu_plugin/releases/download/0.0.1/borrzu.php.zip)
 
 ## 🚀 Features
 
