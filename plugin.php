@@ -196,24 +196,225 @@ function uvp_create_logs_table() {
     dbDelta($sql);
 }
 
-// Function to log API calls
+// Modify the uvp_log_api_call function to better handle the data
 function uvp_log_api_call($user_id, $endpoint, $headers, $request_data, $response_data, $status_code) {
     global $wpdb;
     $table_name = $wpdb->prefix . 'borrzu_api_logs';
     
-    $wpdb->insert(
+    // Convert headers to string if it's an object or array
+    if (is_object($headers) || is_array($headers)) {
+        $headers = json_encode($headers, JSON_UNESCAPED_UNICODE);
+    }
+
+    // Convert request data to string
+    if (is_array($request_data) || is_object($request_data)) {
+        $request_data = json_encode($request_data, JSON_UNESCAPED_UNICODE);
+    }
+
+    // Convert response data to string
+    if (is_array($response_data) || is_object($response_data)) {
+        $response_data = json_encode($response_data, JSON_UNESCAPED_UNICODE);
+    }
+
+    // Insert log
+    $result = $wpdb->insert(
         $table_name,
         array(
             'user_id' => $user_id,
             'endpoint' => $endpoint,
-            'headers' => json_encode($headers),
-            'request_data' => json_encode($request_data),
-            'response_data' => json_encode($response_data),
-            'status_code' => $status_code
+            'headers' => $headers,
+            'request_data' => $request_data,
+            'response_data' => $response_data,
+            'status_code' => $status_code,
+            'created_at' => current_time('mysql')
         ),
-        array('%d', '%s', '%s', '%s', '%s', '%d')
+        array('%d', '%s', '%s', '%s', '%s', '%d', '%s')
+    );
+
+    if ($result === false) {
+        error_log('Borrzu API Log Error: ' . $wpdb->last_error);
+    }
+
+    return $result;
+}
+
+// Function to make API calls with logging
+function uvp_make_api_call($endpoint, $method = 'GET', $data = null, $headers = array()) {
+    $user_id = get_current_user_id();
+    $start_time = microtime(true);
+    
+    // Prepare the request
+    $args = array(
+        'method'      => $method,
+        'timeout'     => 30,
+        'redirection' => 5,
+        'headers'     => $headers,
+        'sslverify'   => true
+    );
+
+    if ($data !== null) {
+        $args['body'] = is_array($data) ? json_encode($data) : $data;
+    }
+
+    // Make the API call
+    $response = wp_remote_request($endpoint, $args);
+    
+    // Get response data
+    $status_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    $response_headers = wp_remote_retrieve_headers($response);
+    
+    // Log the API call
+    uvp_log_api_call(
+        $user_id,
+        $endpoint,
+        $headers,
+        $data,
+        array(
+            'body' => $response_body,
+            'headers' => $response_headers,
+            'status' => $status_code,
+            'duration' => round((microtime(true) - $start_time) * 1000, 2) // Duration in milliseconds
+        ),
+        $status_code
+    );
+
+    // Return the response
+    if (is_wp_error($response)) {
+        return array(
+            'success' => false,
+            'status_code' => 500,
+            'message' => $response->get_error_message(),
+            'data' => null
+        );
+    }
+
+    return array(
+        'success' => $status_code >= 200 && $status_code < 300,
+        'status_code' => $status_code,
+        'message' => wp_remote_retrieve_response_message($response),
+        'data' => json_decode($response_body, true)
     );
 }
+
+// Function to handle API errors and logging
+function uvp_handle_api_error($response, $endpoint) {
+    if (!$response['success']) {
+        // Log error to WordPress error log
+        error_log(sprintf(
+            '[Borrzu API Error] Endpoint: %s, Status: %d, Message: %s',
+            $endpoint,
+            $response['status_code'],
+            $response['message']
+        ));
+
+        // Add admin notice for admin users
+        if (current_user_can('manage_options')) {
+            add_action('admin_notices', function() use ($response) {
+                ?>
+                <div class="notice notice-error is-dismissible">
+                    <p>
+                        <strong>خطا در API برزو:</strong>
+                        <?php echo esc_html($response['message']); ?>
+                        (کد خطا: <?php echo esc_html($response['status_code']); ?>)
+                    </p>
+                </div>
+                <?php
+            });
+        }
+
+        return false;
+    }
+    return true;
+}
+
+// Example usage:
+function uvp_example_api_call() {
+    $endpoint = 'https://api.borrzu.com/v1/endpoint';
+    $headers = array(
+        'Authorization' => 'Bearer ' . get_user_meta(get_current_user_id(), 'uvp_secret_key', true),
+        'Content-Type' => 'application/json'
+    );
+    $data = array('key' => 'value');
+
+    $response = uvp_make_api_call($endpoint, 'POST', $data, $headers);
+    
+    // Handle any errors
+    if (!uvp_handle_api_error($response, $endpoint)) {
+        return false;
+    }
+
+    // Process successful response
+    return $response['data'];
+}
+
+// Enhance the API logs display to show more details
+function uvp_enhance_api_log_display($log) {
+    $response_data = json_decode($log->response_data, true);
+    $status_code = $log->status_code;
+    $duration = isset($response_data['duration']) ? $response_data['duration'] : null;
+    
+    $status_class = ($status_code >= 200 && $status_code < 300) ? 'success' : 'error';
+    ?>
+    <div class="log-item <?php echo esc_attr($status_class); ?>">
+        <div class="log-header">
+            <div class="log-header-left">
+                <span class="method"><?php echo esc_html($log->method ?? 'GET'); ?></span>
+                <span class="endpoint"><?php echo esc_html($log->endpoint); ?></span>
+            </div>
+            <div class="log-header-right">
+                <span class="status-code"><?php echo esc_html($status_code); ?></span>
+                <?php if ($duration): ?>
+                    <span class="duration"><?php echo esc_html($duration); ?>ms</span>
+                <?php endif; ?>
+                <span class="date"><?php echo wp_date('Y/m/d H:i', strtotime($log->created_at)); ?></span>
+            </div>
+        </div>
+        <div class="log-details" style="display: none;">
+            <!-- ... existing log details ... -->
+            <?php if ($status_code >= 400): ?>
+                <div class="detail-section error-details">
+                    <h4>جزئیات خطا:</h4>
+                    <pre><?php echo esc_html(json_encode($response_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+}
+
+// Add these styles to your existing CSS
+add_action('admin_head', function() {
+    ?>
+    <style>
+        /* Add to your existing styles */
+        .log-header-left, .log-header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .method {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .duration {
+            color: #666;
+            font-size: 12px;
+        }
+        .error-details {
+            background: #fff5f5;
+            border-left: 3px solid #dc3545;
+            padding: 15px;
+        }
+        .error-details h4 {
+            color: #dc3545;
+        }
+    </style>
+    <?php
+});
 
 // Add submenu for API logs
 function uvp_add_admin_menu() {
@@ -273,7 +474,7 @@ function uvp_admin_menu_style() {
 }
 add_action('admin_head', 'uvp_admin_menu_style');
 
-// API Logs page
+// Modify the API logs page query to show all logs
 function uvp_api_logs_page() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'borrzu_api_logs';
@@ -283,22 +484,16 @@ function uvp_api_logs_page() {
     $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
     $offset = ($current_page - 1) * $per_page;
     
-    // Get logs
+    // Get all logs (removed user_id filter)
     $logs = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT * FROM $table_name WHERE user_id = %d ORDER BY created_at DESC LIMIT %d OFFSET %d",
-            get_current_user_id(),
+            "SELECT * FROM $table_name ORDER BY created_at DESC LIMIT %d OFFSET %d",
             $per_page,
             $offset
         )
     );
     
-    $total_items = $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_name WHERE user_id = %d",
-            get_current_user_id()
-        )
-    );
+    $total_items = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
     
     ?>
     <div class="wrap borrzu-wrap">
@@ -329,27 +524,7 @@ function uvp_api_logs_page() {
             <?php else : ?>
                 <div class="borrzu-logs-table">
                     <?php foreach ($logs as $log) : ?>
-                        <div class="log-item <?php echo $log->status_code >= 200 && $log->status_code < 300 ? 'success' : 'error'; ?>">
-                            <div class="log-header">
-                                <span class="endpoint"><?php echo esc_html($log->endpoint); ?></span>
-                                <span class="status-code"><?php echo esc_html($log->status_code); ?></span>
-                                <span class="date"><?php echo wp_date('Y/m/d H:i', strtotime($log->created_at)); ?></span>
-                            </div>
-                            <div class="log-details" style="display: none;">
-                                <div class="detail-section">
-                                    <h4>هدرها:</h4>
-                                    <pre><?php echo esc_html(json_encode(json_decode($log->headers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
-                                </div>
-                                <div class="detail-section">
-                                    <h4>داده‌های درخواست:</h4>
-                                    <pre><?php echo esc_html(json_encode(json_decode($log->request_data), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
-                                </div>
-                                <div class="detail-section">
-                                    <h4>پاسخ:</h4>
-                                    <pre><?php echo esc_html(json_encode(json_decode($log->response_data), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
-                                </div>
-                            </div>
-                        </div>
+                        <?php uvp_enhance_api_log_display($log); ?>
                     <?php endforeach; ?>
                 </div>
                 
@@ -798,16 +973,20 @@ function uvp_register_verification_endpoint() {
 }
 add_action('rest_api_init', 'uvp_register_verification_endpoint');
 
-// Verification endpoint callback
+// Modify the verify plugin endpoint to properly log
 function uvp_verify_plugin(WP_REST_Request $request) {
+    // Include required admin functions
+    if (!function_exists('is_plugin_active')) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    }
+
     $site_url = get_site_url();
-    $plugin_version = '1.0'; // Match your plugin version
+    $plugin_version = '1.0';
     $user_count = count_users();
     
-    // Get plugin status
     $is_active = is_plugin_active(plugin_basename(__FILE__));
+    $is_woocommerce_active = class_exists('WooCommerce');
     
-    // Get connection status - check if any user has a secret key
     global $wpdb;
     $has_active_keys = $wpdb->get_var(
         "SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = 'uvp_secret_key' AND meta_value != ''"
@@ -821,25 +1000,34 @@ function uvp_verify_plugin(WP_REST_Request $request) {
         'is_active' => $is_active,
         'has_active_keys' => $has_active_keys > 0,
         'total_users' => $user_count['total_users'],
+        'woocommerce' => array(
+            'is_active' => $is_woocommerce_active,
+            'message' => $is_woocommerce_active ? 'ووکامرس فعال است' : 'ووکامرس فعال نیست'
+        ),
         'connection_status' => array(
             'connected' => true,
             'message' => 'اتصال به برزو برقرار است'
         )
     );
 
-    // Log this verification check
-    if (function_exists('uvp_log_api_call')) {
-        uvp_log_api_call(
-            0, // system check, no specific user
-            'verify',
-            array('source' => 'borrzu.com'),
-            array('site_url' => $site_url),
-            $response,
-            200
-        );
-    }
+    // Set status code based on WooCommerce status
+    $status_code = $is_woocommerce_active ? 200 : 428; // 428 Precondition Required
 
-    return new WP_REST_Response($response, 200);
+    // Log the API call with all headers
+    uvp_log_api_call(
+        0,
+        'verify',
+        $request->get_headers(),
+        array(
+            'method' => 'GET',
+            'url' => $request->get_route(),
+            'params' => $request->get_params()
+        ),
+        $response,
+        $status_code
+    );
+
+    return new WP_REST_Response($response, $status_code);
 }
 
 // Add connection status to admin page
@@ -918,3 +1106,170 @@ function uvp_add_connection_status_to_pages() {
     }
 }
 add_action('admin_footer', 'uvp_add_connection_status_to_pages');
+
+// Add new endpoints for user verification and purchase status
+function uvp_register_api_endpoints() {
+    // Existing verification endpoint
+    register_rest_route('borrzu/v1', '/verify', array(
+        'methods' => 'GET',
+        'callback' => 'uvp_verify_plugin',
+        'permission_callback' => '__return_true'
+    ));
+
+    // New endpoint for user verification
+    register_rest_route('borrzu/v1', '/verify-user', array(
+        'methods' => 'POST',
+        'callback' => 'uvp_verify_user',
+        'permission_callback' => function() {
+            return uvp_verify_api_key();
+        },
+        'args' => array(
+            'email' => array(
+                'required' => true,
+                'type' => 'string',
+                'format' => 'email',
+                'description' => 'User email address'
+            ),
+            'username' => array(
+                'required' => false,
+                'type' => 'string',
+                'description' => 'Username (optional)'
+            )
+        )
+    ));
+
+    // New endpoint for purchase verification
+    register_rest_route('borrzu/v1', '/verify-purchase', array(
+        'methods' => 'POST',
+        'callback' => 'uvp_verify_purchase',
+        'permission_callback' => function() {
+            return uvp_verify_api_key();
+        },
+        'args' => array(
+            'email' => array(
+                'required' => true,
+                'type' => 'string',
+                'format' => 'email',
+                'description' => 'User email address'
+            ),
+            'product_id' => array(
+                'required' => true,
+                'type' => 'integer',
+                'description' => 'Product ID to verify'
+            )
+        )
+    ));
+}
+add_action('rest_api_init', 'uvp_register_api_endpoints');
+
+// Verify API key from request headers
+function uvp_verify_api_key() {
+    $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
+        return false;
+    }
+
+    $secret_key = trim($matches[1]);
+    global $wpdb;
+    
+    // Check if the key exists in user meta
+    $user_with_key = $wpdb->get_var($wpdb->prepare(
+        "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = 'uvp_secret_key' AND meta_value = %s",
+        $secret_key
+    ));
+
+    return !empty($user_with_key);
+}
+
+// User verification endpoint callback
+function uvp_verify_user(WP_REST_Request $request) {
+    $email = sanitize_email($request->get_param('email'));
+    $username = sanitize_user($request->get_param('username'));
+
+    // Check if user exists by email
+    $user = get_user_by('email', $email);
+    
+    // If not found by email and username is provided, try by username
+    if (!$user && $username) {
+        $user = get_user_by('login', $username);
+    }
+
+    if (!$user) {
+        $response = array(
+            'exists' => false,
+            'message' => 'کاربر یافت نشد'
+        );
+        $status_code = 404;
+    } else {
+        $response = array(
+            'exists' => true,
+            'message' => 'کاربر یافت شد',
+            'user_data' => array(
+                'id' => $user->ID,
+                'email' => $user->user_email,
+                'username' => $user->user_login,
+                'registered_date' => $user->user_registered
+            )
+        );
+        $status_code = 200;
+    }
+
+    // Log the API call
+    uvp_log_api_call(
+        get_current_user_id(),
+        'verify-user',
+        $request->get_headers(),
+        array('email' => $email, 'username' => $username),
+        $response,
+        $status_code
+    );
+
+    return new WP_REST_Response($response, $status_code);
+}
+
+// Purchase verification endpoint callback
+function uvp_verify_purchase(WP_REST_Request $request) {
+    $email = sanitize_email($request->get_param('email'));
+    $product_id = intval($request->get_param('product_id'));
+
+    // Get user by email
+    $user = get_user_by('email', $email);
+    
+    if (!$user) {
+        $response = array(
+            'has_purchased' => false,
+            'message' => 'کاربر یافت نشد'
+        );
+        $status_code = 404;
+    } else {
+        // Check if WooCommerce is active
+        if (class_exists('WooCommerce')) {
+            $has_purchased = wc_customer_bought_product($user->user_email, $user->ID, $product_id);
+            $response = array(
+                'has_purchased' => $has_purchased,
+                'message' => $has_purchased ? 'کاربر این محصول را خریداری کرده است' : 'کاربر این محصول را خریداری نکرده است',
+                'user_id' => $user->ID,
+                'product_id' => $product_id
+            );
+            $status_code = 200;
+        } else {
+            $response = array(
+                'error' => true,
+                'message' => 'ووکامرس فعال نیست'
+            );
+            $status_code = 500;
+        }
+    }
+
+    // Log the API call
+    uvp_log_api_call(
+        get_current_user_id(),
+        'verify-purchase',
+        $request->get_headers(),
+        array('email' => $email, 'product_id' => $product_id),
+        $response,
+        $status_code
+    );
+
+    return new WP_REST_Response($response, $status_code);
+}
