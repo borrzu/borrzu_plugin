@@ -4,6 +4,9 @@
 
 A powerful WordPress plugin for managing API keys and monitoring API requests for Borrzu.com integration.
 
+[🇮🇷 مستندات فارسی](README-fa.md)
+
+
 ## 🚀 Features
 
 - **Secure Key Management**: Generate and manage secret API keys for users
