@@ -55,3 +55,7 @@ A powerful WordPress plugin for managing API keys and monitoring API requests fo
 ## 🛠️ API Endpoints
 
 The plugin provides several REST API endpoints:
+
+---
+
+made with ❤️ by [Borrzu.com](https://borrzu.com)
