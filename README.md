@@ -56,6 +56,52 @@ A powerful WordPress plugin for managing API keys and monitoring API requests fo
 
 The plugin provides several REST API endpoints:
 
+### Verify User
+```http
+POST /wp-json/borrzu/v1/verify-user
+```
+Parameters:
+- `email` (required): User email address
+- `username` (optional): Username
+
+### Verify Purchase
+```http
+POST /wp-json/borrzu/v1/verify-purchase
+```
+Parameters:
+- `email` (required): User email address
+- `product_id` (required): WooCommerce product ID
+
+## 📝 Usage
+
+### Authentication
+All API requests must include your secret key in the Authorization header:
+```http
+Authorization: Bearer YOUR_SECRET_KEY
+```
+
+### Example Request
+```php
+$response = wp_remote_post('https://your-site.com/wp-json/borrzu/v1/verify-user', [
+    'headers' => [
+        'Authorization' => 'Bearer ' . $secret_key,
+        'Content-Type' => 'application/json'
+    ],
+    'body' => json_encode([
+        'email' => 'user@example.com'
+    ])
+]);
+```
+
+## 🔐 Security Best Practices
+
+- Regenerate keys periodically
+- Never share your secret key
+- Monitor API logs regularly
+- Keep the plugin updated
+- Maintain SSL certificate
+
+
 ---
 
-made with ❤️ by [Borrzu.com](https://borrzu.com)
+Made with ❤️ by [Borrzu.com](https://borrzu.com)
