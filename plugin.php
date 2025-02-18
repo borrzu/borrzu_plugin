@@ -354,7 +354,7 @@ function uvp_enhance_api_log_display($log) {
     $status_code = $log->status_code;
     $duration = isset($response_data['duration']) ? $response_data['duration'] : null;
     
-    $status_class = ($status_code >= 200 && $status_code < 300) ? 'success' : 'error';
+    $status_class = ($status_code >= 200 && $status_code < 300) ? 'success' : 'failed';
     ?>
     <div class="log-item <?php echo esc_attr($status_class); ?>">
         <div class="log-header">
@@ -616,7 +616,7 @@ function uvp_api_logs_page() {
         .log-item.success .log-header {
             background-color: #f0f9f0;
         }
-        .log-item.error .log-header {
+        .log-item.failed .log-header {
             background-color: #fef0f0;
         }
         .endpoint {
