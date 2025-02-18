@@ -348,9 +348,11 @@ function uvp_example_api_call() {
     return $response['data'];
 }
 
-// Enhance the API logs display to show more details
+// Modify the uvp_enhance_api_log_display function to remove collapsible details
 function uvp_enhance_api_log_display($log) {
     $response_data = json_decode($log->response_data, true);
+    $request_data = json_decode($log->request_data, true);
+    $headers = json_decode($log->headers, true);
     $status_code = $log->status_code;
     $duration = isset($response_data['duration']) ? $response_data['duration'] : null;
     
@@ -359,7 +361,7 @@ function uvp_enhance_api_log_display($log) {
     <div class="log-item <?php echo esc_attr($status_class); ?>">
         <div class="log-header">
             <div class="log-header-left">
-                <span class="method"><?php echo esc_html($log->method ?? 'GET'); ?></span>
+                <span class="method"><?php echo esc_html($request_data['method'] ?? 'GET'); ?></span>
                 <span class="endpoint"><?php echo esc_html($log->endpoint); ?></span>
             </div>
             <div class="log-header-right">
@@ -368,53 +370,216 @@ function uvp_enhance_api_log_display($log) {
                     <span class="duration"><?php echo esc_html($duration); ?>ms</span>
                 <?php endif; ?>
                 <span class="date"><?php echo wp_date('Y/m/d H:i', strtotime($log->created_at)); ?></span>
+                <button class="view-details button button-small">مشاهده جزئیات</button>
             </div>
         </div>
+        
+        <!-- Hidden container for modal data -->
         <div class="log-details" style="display: none;">
-            <!-- ... existing log details ... -->
-            <?php if ($status_code >= 400): ?>
-                <div class="detail-section error-details">
-                    <h4>جزئیات خطا:</h4>
+            <div class="tab-content" id="request-tab">
+                <div class="detail-section">
+                    <h4>داده‌های درخواست:</h4>
+                    <pre><?php echo esc_html(json_encode($request_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
+                </div>
+            </div>
+            <div class="tab-content" id="response-tab">
+                <div class="detail-section">
+                    <h4>داده‌های پاسخ:</h4>
                     <pre><?php echo esc_html(json_encode($response_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
                 </div>
-            <?php endif; ?>
+            </div>
+            <div class="tab-content" id="headers-tab">
+                <div class="detail-section">
+                    <h4>هدرهای درخواست:</h4>
+                    <pre><?php echo esc_html(json_encode($headers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre>
+                </div>
+            </div>
         </div>
     </div>
     <?php
 }
 
-// Add these styles to your existing CSS
-add_action('admin_head', function() {
+// Update the filter section styles and layout
+function uvp_add_filter_styles() {
     ?>
     <style>
-        /* Add to your existing styles */
-        .log-header-left, .log-header-right {
+        /* Enhanced Filter Styles */
+        .borrzu-filter-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .filter-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+            align-items: end;
+        }
+        .filter-group {
+            position: relative;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 0.9rem;
+        }
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            background-color: #f9fafb;
+        }
+        .filter-group input:focus,
+        .filter-group select:focus {
+            border-color: #2271b1;
+            box-shadow: 0 0 0 2px rgba(34, 113, 177, 0.1);
+            outline: none;
+            background-color: #fff;
+        }
+        .filter-group input::placeholder {
+            color: #9ca3af;
+        }
+        .filter-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            padding-top: 8px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .filter-actions .button {
+            padding: 8px 16px;
+            height: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+        .filter-actions .button-primary {
+            background: #2271b1;
+            border-color: #2271b1;
+        }
+        .filter-actions .button-primary:hover {
+            background: #135e96;
+            border-color: #135e96;
+        }
+        .filter-actions .button-reset {
+            color: #4b5563;
+            border-color: #e5e7eb;
+        }
+        .filter-actions .button-reset:hover {
+            background: #f3f4f6;
+            border-color: #d1d5db;
+        }
+        
+        /* Enhanced Log Item Styles */
+        .log-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+        .log-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .log-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        .view-details {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            height: auto;
+            line-height: 1.2;
+            background: #f3f4f6;
+            border-color: #e5e7eb;
+            color: #4b5563;
+        }
+        .view-details:hover {
+            background: #e5e7eb;
+            border-color: #d1d5db;
+        }
+        
+        /* Modal Enhancements */
+        .borrzu-modal {
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .modal-header {
+            background: #f9fafb;
+            border-radius: 12px 12px 0 0;
+        }
+        .close-modal {
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: center;
+            transition: all 0.2s ease;
         }
-        .method {
-            background: #e9ecef;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .duration {
-            color: #666;
-            font-size: 12px;
-        }
-        .error-details {
-            background: #fff5f5;
-            border-left: 3px solid #dc3545;
-            padding: 15px;
-        }
-        .error-details h4 {
-            color: #dc3545;
+        .close-modal:hover {
+            background: #e5e7eb;
         }
     </style>
+
+    <script>
+    jQuery(document).ready(function($) {
+        // Show modal when clicking view details button
+        $('.view-details').click(function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const logItem = $(this).closest('.log-item');
+            const requestData = logItem.find('#request-tab').html();
+            const responseData = logItem.find('#response-tab').html();
+            const headersData = logItem.find('#headers-tab').html();
+            
+            // Populate modal content
+            $('#modal-request-tab').html(requestData);
+            $('#modal-response-tab').html(responseData);
+            $('#modal-headers-tab').html(headersData);
+            
+            // Show first tab
+            $('#log-detail-modal .tab-content').hide();
+            $('#modal-request-tab').show();
+            $('#log-detail-modal .tab-button').first().addClass('active')
+                .siblings().removeClass('active');
+            
+            // Show modal
+            $('#log-detail-modal').fadeIn(200);
+        });
+        
+        // Close modal with escape key
+        $(document).keydown(function(e) {
+            if (e.keyCode === 27) { // escape key
+                $('#log-detail-modal').fadeOut(200);
+            }
+        });
+    });
+    </script>
     <?php
-});
+}
+add_action('admin_footer', 'uvp_add_filter_styles');
 
 // Add submenu for API logs
 function uvp_add_admin_menu() {
@@ -479,20 +644,51 @@ function uvp_api_logs_page() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'borrzu_api_logs';
     
+    // Get filter values
+    $endpoint_filter = isset($_GET['endpoint']) ? sanitize_text_field($_GET['endpoint']) : '';
+    $status_filter = isset($_GET['status']) ? sanitize_text_field($_GET['status']) : '';
+    $date_from = isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '';
+    $date_to = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
+    
+    // Build query
+    $where_clauses = array();
+    $where_values = array();
+    
+    if (!empty($endpoint_filter)) {
+        $where_clauses[] = 'endpoint LIKE %s';
+        $where_values[] = '%' . $wpdb->esc_like($endpoint_filter) . '%';
+    }
+    
+    if (!empty($status_filter)) {
+        $where_clauses[] = 'status_code = %d';
+        $where_values[] = intval($status_filter);
+    }
+    
+    if (!empty($date_from)) {
+        $where_clauses[] = 'created_at >= %s';
+        $where_values[] = $date_from . ' 00:00:00';
+    }
+    
+    if (!empty($date_to)) {
+        $where_clauses[] = 'created_at <= %s';
+        $where_values[] = $date_to . ' 23:59:59';
+    }
+    
     // Pagination
     $per_page = 20;
     $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
     $offset = ($current_page - 1) * $per_page;
     
-    // Get all logs (removed user_id filter)
-    $logs = $wpdb->get_results(
-        $wpdb->prepare(
-            "SELECT * FROM $table_name ORDER BY created_at DESC LIMIT %d OFFSET %d",
-            $per_page,
-            $offset
-        )
-    );
+    // Construct final query
+    $query = "SELECT * FROM $table_name";
+    if (!empty($where_clauses)) {
+        $query .= ' WHERE ' . implode(' AND ', $where_clauses);
+    }
+    $query .= ' ORDER BY created_at DESC LIMIT %d OFFSET %d';
+    $where_values[] = $per_page;
+    $where_values[] = $offset;
     
+    $logs = $wpdb->get_results($wpdb->prepare($query, $where_values));
     $total_items = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
     
     ?>
@@ -505,6 +701,47 @@ function uvp_api_logs_page() {
         <div class="borrzu-tabs">
             <a href="?page=borrzu-secret-key" class="tab-item">مدیریت کلید</a>
             <a href="?page=borrzu-api-logs" class="tab-item active">گزارش‌های API</a>
+        </div>
+
+        <!-- Filter Section -->
+        <div class="borrzu-filter-card">
+            <form method="get" class="filter-form">
+                <input type="hidden" name="page" value="borrzu-api-logs">
+                
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label for="endpoint">آدرس API:</label>
+                        <input type="text" id="endpoint" name="endpoint" value="<?php echo esc_attr($endpoint_filter); ?>" placeholder="جستجو در آدرس‌ها...">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="status">وضعیت:</label>
+                        <select id="status" name="status">
+                            <option value="">همه</option>
+                            <option value="200" <?php selected($status_filter, '200'); ?>>موفق (200)</option>
+                            <option value="400" <?php selected($status_filter, '400'); ?>>خطای درخواست (400)</option>
+                            <option value="401" <?php selected($status_filter, '401'); ?>>عدم دسترسی (401)</option>
+                            <option value="404" <?php selected($status_filter, '404'); ?>>یافت نشد (404)</option>
+                            <option value="500" <?php selected($status_filter, '500'); ?>>خطای سرور (500)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="date_from">از تاریخ:</label>
+                        <input type="date" id="date_from" name="date_from" value="<?php echo esc_attr($date_from); ?>">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="date_to">تا تاریخ:</label>
+                        <input type="date" id="date_to" name="date_to" value="<?php echo esc_attr($date_to); ?>">
+                    </div>
+                </div>
+                
+                <div class="filter-actions">
+                    <button type="submit" class="button button-primary">اعمال فیلتر</button>
+                    <a href="?page=borrzu-api-logs" class="button">پاک کردن فیلترها</a>
+                </div>
+            </form>
         </div>
 
         <div class="borrzu-card">
@@ -531,9 +768,6 @@ function uvp_api_logs_page() {
                 <?php
                 $total_pages = ceil($total_items / $per_page);
                 if ($total_pages > 1) :
-                ?>
-                <div class="borrzu-pagination">
-                    <?php
                     echo paginate_links(array(
                         'base' => add_query_arg('paged', '%#%'),
                         'format' => '',
@@ -542,10 +776,29 @@ function uvp_api_logs_page() {
                         'total' => $total_pages,
                         'current' => $current_page
                     ));
-                    ?>
-                </div>
-                <?php endif; ?>
+                endif;
+                ?>
             <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Modal Template -->
+    <div id="log-detail-modal" class="borrzu-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>جزئیات لاگ</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-tabs">
+                    <button class="tab-button active" data-tab="request">درخواست</button>
+                    <button class="tab-button" data-tab="response">پاسخ</button>
+                    <button class="tab-button" data-tab="headers">هدرها</button>
+                </div>
+                <div class="tab-content" id="modal-request-tab"></div>
+                <div class="tab-content" id="modal-response-tab"></div>
+                <div class="tab-content" id="modal-headers-tab"></div>
+            </div>
         </div>
     </div>
 
@@ -658,13 +911,141 @@ function uvp_api_logs_page() {
             margin-top: 20px;
             text-align: center;
         }
+        
+        /* Filter Styles */
+        .borrzu-filter-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .filter-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .filter-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #495057;
+        }
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* Modal Styles */
+        .borrzu-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100000;
+            padding: 20px;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            max-width: 900px;
+            margin: 40px auto;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        .modal-body {
+            padding: 20px;
+        }
+        .modal-body .log-tabs {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
     </style>
 
     <script>
     jQuery(document).ready(function($) {
+        // Show modal when clicking on log item
         $('.log-header').click(function() {
-            $(this).next('.log-details').slideToggle();
+            const logItem = $(this).closest('.log-item');
+            const requestData = logItem.find('#request-tab').html();
+            const responseData = logItem.find('#response-tab').html();
+            const headersData = logItem.find('#headers-tab').html();
+            
+            // Populate modal content
+            $('#modal-request-tab').html(requestData);
+            $('#modal-response-tab').html(responseData);
+            $('#modal-headers-tab').html(headersData);
+            
+            // Show modal
+            $('#log-detail-modal').fadeIn(200);
+            
+            // Prevent event bubbling
+            return false;
         });
+        
+        // Close modal
+        $('.close-modal, .borrzu-modal').click(function(e) {
+            if (e.target === this) {
+                $('#log-detail-modal').fadeOut(200);
+            }
+        });
+        
+        // Modal tab switching
+        $('#log-detail-modal .tab-button').click(function() {
+            const tabId = $(this).data('tab');
+            
+            // Update active tab button
+            $(this).siblings().removeClass('active');
+            $(this).addClass('active');
+            
+            // Show selected tab content
+            $('#log-detail-modal .tab-content').hide();
+            $(`#modal-${tabId}-tab`).show();
+        });
+        
+        // Show first tab by default
+        $('#log-detail-modal .tab-content').hide();
+        $('#modal-request-tab').show();
     });
     </script>
     <?php
