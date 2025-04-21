@@ -332,7 +332,7 @@ function uvp_handle_api_error($response, $endpoint) {
 function uvp_example_api_call() {
     $endpoint = 'https://api.borrzu.com/v1/endpoint';
     $headers = array(
-        'Authorization' => 'Bearer ' . get_user_meta(get_current_user_id(), 'uvp_secret_key', true),
+        'X-Borrzu-Auth' => get_user_meta(get_current_user_id(), 'uvp_secret_key', true),
         'Content-Type' => 'application/json'
     );
     $data = array('key' => 'value');
@@ -1139,6 +1139,10 @@ function uvp_admin_page() {
                                 <span class="dashicons dashicons-warning"></span>
                                 <span>در صورت بازسازی کلید، کلید قبلی غیرفعال خواهد شد</span>
                             </div>
+                            <div class="info-item">
+                                <span class="dashicons dashicons-admin-network"></span>
+                                <span>برای استفاده در API، از هدر <code>X-Borrzu-Auth</code> با مقدار کلید استفاده کنید</span>
+                            </div>
                         </div>
 
                         <div class="danger-zone">
@@ -1501,7 +1505,31 @@ function uvp_register_api_endpoints() {
     register_rest_route('borrzu/v1', '/verify-user', array(
         'methods' => 'POST',
         'callback' => 'uvp_verify_user',
-        'permission_callback' => function() {
+        'permission_callback' => function(WP_REST_Request $request) {
+            // Check if it seems like a JWT token is being used
+            $auth_header = $request->get_header('authorization');
+            if (!empty($auth_header) && preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
+                $token = trim($matches[1]);
+                if (substr_count($token, '.') == 2) {
+                    // This is likely a JWT token, so show a helpful message
+                    $error = new WP_Error(
+                        'borrzu_jwt_conflict', 
+                        'JWT token detected - برای استفاده از API برزو، لطفا از هدر X-Borrzu-Auth استفاده کنید', 
+                        array('status' => 403)
+                    );
+                    
+                    // Register a filter to modify the response
+                    add_filter('rest_request_before_callbacks', function($response) use ($error) {
+                        if (is_wp_error($response)) {
+                            return $response;
+                        }
+                        return $error;
+                    });
+                    
+                    return false;
+                }
+            }
+            
             return uvp_verify_api_key();
         },
         'args' => array(
@@ -1523,7 +1551,31 @@ function uvp_register_api_endpoints() {
     register_rest_route('borrzu/v1', '/verify-purchase', array(
         'methods' => 'POST',
         'callback' => 'uvp_verify_purchase',
-        'permission_callback' => function() {
+        'permission_callback' => function(WP_REST_Request $request) {
+            // Check if it seems like a JWT token is being used
+            $auth_header = $request->get_header('authorization');
+            if (!empty($auth_header) && preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
+                $token = trim($matches[1]);
+                if (substr_count($token, '.') == 2) {
+                    // This is likely a JWT token, so show a helpful message
+                    $error = new WP_Error(
+                        'borrzu_jwt_conflict', 
+                        'JWT token detected - برای استفاده از API برزو، لطفا از هدر X-Borrzu-Auth استفاده کنید', 
+                        array('status' => 403)
+                    );
+                    
+                    // Register a filter to modify the response
+                    add_filter('rest_request_before_callbacks', function($response) use ($error) {
+                        if (is_wp_error($response)) {
+                            return $response;
+                        }
+                        return $error;
+                    });
+                    
+                    return false;
+                }
+            }
+            
             return uvp_verify_api_key();
         },
         'args' => array(
@@ -1545,12 +1597,25 @@ add_action('rest_api_init', 'uvp_register_api_endpoints');
 
 // Verify API key from request headers
 function uvp_verify_api_key() {
-    $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
-        return false;
+    // Check for our custom header first (preferred method)
+    $borrzu_header = $_SERVER['HTTP_X_BORRZU_AUTH'] ?? '';
+    if (!empty($borrzu_header)) {
+        $secret_key = trim($borrzu_header);
+    } else {
+        // Fallback to Authorization header, but try to avoid conflict with JWT plugin
+        $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        if (!preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
+            return false;
+        }
+        
+        $secret_key = trim($matches[1]);
+        
+        // Check if this might be a JWT token (JWTs have 3 segments separated by dots)
+        if (substr_count($secret_key, '.') == 2) {
+            return false; // Let JWT plugin handle this
+        }
     }
-
-    $secret_key = trim($matches[1]);
+    
     global $wpdb;
     
     // Check if the key exists in user meta
